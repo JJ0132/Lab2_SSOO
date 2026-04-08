@@ -26,21 +26,71 @@ void lanzar_monitor() {
     }
 }
 
+int crear_nueva_cuenta() {
+    // Abrimos los semáforos ya existentes
+    sem_t *sem_config = sem_open("/sem_config", 0);
+    sem_t *sem_cuentas = sem_open("/sem_cuentas", 0);
+
+    // --- SECCIÓN CRÍTICA 1: Configuración ---
+    sem_wait(sem_config); // Bajamos la barrera
+    
+    int nuevo_id = config_banco.proximo_id;
+    config_banco.proximo_id++; // Preparamos el ID para el siguiente usuario
+    
+    // (Opcional por ahora: Aquí iría el código para reescribir config.txt 
+    // y guardar el nuevo PROXIMO_ID permanentemente en el disco)
+    
+    sem_post(sem_config); // Levantamos la barrera
+    // ----------------------------------------
+
+    // Preparamos los datos de la nueva cuenta
+    Cuenta nueva_cuenta;
+    nueva_cuenta.numero_cuenta = nuevo_id;
+    sprintf(nueva_cuenta.titular, "Usuario %d", nuevo_id);
+    nueva_cuenta.saldo_eur = 0.0;
+    nueva_cuenta.saldo_usd = 0.0;
+    nueva_cuenta.saldo_gbp = 0.0;
+    nueva_cuenta.num_transacciones = 0;
+
+    // --- SECCIÓN CRÍTICA 2: Archivo de Cuentas ---
+    sem_wait(sem_cuentas); // Bajamos la barrera
+    
+    // Abrimos en modo "Append Binary" (ab). Si no existe, lo crea.
+    FILE *archivo = fopen(config_banco.archivo_cuentas, "ab");
+    if (archivo != NULL) {
+        fwrite(&nueva_cuenta, sizeof(Cuenta), 1, archivo);
+        fclose(archivo);
+    } else {
+        perror("Error al abrir cuentas.dat para escritura");
+    }
+    
+    sem_post(sem_cuentas); // Levantamos la barrera
+    // ---------------------------------------------
+
+    printf("[BANCO] ¡Cuenta creada exitosamente! Tu numero de cuenta es: %d\n", nuevo_id);
+    
+    // Devolvemos el ID creado para que el programa sepa qué cuenta es
+    return nuevo_id;
+}
+
 void bucle_principal() {
     while (1) {
         int cuenta;
-
-        printf("Introduce número de cuenta (0 para crear nueva): ");
+        printf("\nIntroduce número de cuenta (0 para crear nueva): ");
         scanf("%d", &cuenta);
 
+        // Si es 0, creamos la cuenta antes de lanzar el proceso hijo
+        if (cuenta == 0) {
+            cuenta = crear_nueva_cuenta();
+        }
+
+        // --- Código original del esqueleto ---
         int pipefd[2];
         pipe(pipefd);
 
         pid_t pid = fork();
-
-        if (pid == 0) {
+        if (pid == 0) { // Proceso Hijo (Usuario)
             close(pipefd[1]);
-
             char cuenta_str[20];
             sprintf(cuenta_str, "%d", cuenta);
 
@@ -49,8 +99,12 @@ void bucle_principal() {
 
             perror("Error ejecutando usuario");
             exit(1);
-        } else {
+        } else { // Proceso Padre (Banco)
             close(pipefd[0]);
+            
+            // FASE 3.2: El padre debe esperar a que el hijo termine 
+            // antes de volver a pedir otra cuenta.
+            waitpid(pid, NULL, 0); 
         }
     }
 }
