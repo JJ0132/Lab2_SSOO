@@ -41,4 +41,32 @@ struct msgbuf {
     } info;
 };
 
+// Estructura para almacenar la configuración del banco
+typedef struct {
+    int proximo_id;
+    
+    // Límites de retiro
+    float lim_ret_eur;
+    float lim_ret_usd;
+    float lim_ret_gbp;
+    
+    // Límites de transferencia
+    float lim_trf_eur;
+    float lim_trf_usd;
+    float lim_trf_gbp;
+    
+    // Umbrales para el monitor
+    int umbral_retiros;
+    int umbral_transferencias;
+    
+    // Parámetros de ejecución
+    int num_hilos;
+    char archivo_cuentas[100];
+    char archivo_log[100];
+    
+    // Tipos de cambio (1 EUR = X)
+    float cambio_usd;
+    float cambio_gbp;
+} Configuracion;
+
 #endif

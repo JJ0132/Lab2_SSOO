@@ -4,6 +4,7 @@
 #include <sys/wait.h>
 #include <sys/msg.h>
 #include "estructuras.h"
+#include "config.h"
 
 int msgid;
 
@@ -52,16 +53,23 @@ void bucle_principal() {
 }
 
 int main() {
+    // 1. Cargar la configuración ANTES de hacer nada más
+    cargar_configuracion("config.txt");
 
+    // [TEST] Comprobamos que ha leído bien imprimiendo un par de variables
+    printf("[TEST] Proximo ID a asignar: %d\n", config_banco.proximo_id);
+    printf("[TEST] Limite de transferencias EUR: %.2f\n", config_banco.lim_trf_eur);
+    printf("[TEST] Umbral de retiros sospechosos: %d\n", config_banco.umbral_retiros);
+    printf("--------------------------------------------------\n");
+
+    // 2. Crear cola de mensajes (código original del esqueleto)
     msgid = msgget(IPC_PRIVATE, 0666 | IPC_CREAT);
-
     if (msgid < 0) {
         perror("Error creando cola de mensajes");
         exit(1);
     }
 
     lanzar_monitor();
-
     bucle_principal();
 
     return 0;
