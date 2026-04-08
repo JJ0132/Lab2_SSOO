@@ -54,7 +54,7 @@ void bucle_principal() {
 
 int main() {
     // 1. Cargar la configuración ANTES de hacer nada más
-    cargar_configuracion("config.txt");
+    cargar_configuracion("../C/config.txt");
 
     // [TEST] Comprobamos que ha leído bien imprimiendo un par de variables
     printf("[TEST] Proximo ID a asignar: %d\n", config_banco.proximo_id);
