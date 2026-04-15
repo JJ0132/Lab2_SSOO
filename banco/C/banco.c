@@ -96,12 +96,14 @@ void bucle_principal() {
             
             char cuenta_str[20];
             char pipe_str[20]; // <-- NUEVO: Para pasar el pipe al hijo
+            char msgid_str[20];
             
             sprintf(cuenta_str, "%d", cuenta);
             sprintf(pipe_str, "%d", pipefd[0]); // Guardamos el número del pipe de lectura
+            sprintf(msgid_str, "%d", msgid);
 
-            // Pasamos el pipe de lectura como tercer argumento
-            char *args[] = {"./usuario", cuenta_str, pipe_str, NULL};
+            // Pasamos cuenta, pipe y cola de mensajes al usuario
+            char *args[] = {"./usuario", cuenta_str, pipe_str, msgid_str, NULL};
             execv("./usuario", args);
 
             perror("Error ejecutando usuario");
