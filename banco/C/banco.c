@@ -10,6 +10,7 @@
 #include <semaphore.h>       // Para usar los semáforos POSIX
 
 int msgid;
+int pipe_lectura;
 
 void lanzar_monitor() {
     pid_t pid = fork();
@@ -79,32 +80,39 @@ void bucle_principal() {
         printf("\nIntroduce número de cuenta (0 para crear nueva): ");
         scanf("%d", &cuenta);
 
-        // Si es 0, creamos la cuenta antes de lanzar el proceso hijo
         if (cuenta == 0) {
             cuenta = crear_nueva_cuenta();
         }
 
-        // --- Código original del esqueleto ---
         int pipefd[2];
-        pipe(pipefd);
+        if (pipe(pipefd) == -1) {
+            perror("Error creando el pipe");
+            continue; // Si falla el pipe, volvemos a empezar
+        }
 
         pid_t pid = fork();
         if (pid == 0) { // Proceso Hijo (Usuario)
-            close(pipefd[1]);
+            close(pipefd[1]); // El hijo cierra el extremo de escritura (no lo usa)
+            
             char cuenta_str[20];
+            char pipe_str[20]; // <-- NUEVO: Para pasar el pipe al hijo
+            
             sprintf(cuenta_str, "%d", cuenta);
+            sprintf(pipe_str, "%d", pipefd[0]); // Guardamos el número del pipe de lectura
 
-            char *args[] = {"./usuario", cuenta_str, NULL};
+            // Pasamos el pipe de lectura como tercer argumento
+            char *args[] = {"./usuario", cuenta_str, pipe_str, NULL};
             execv("./usuario", args);
 
             perror("Error ejecutando usuario");
             exit(1);
         } else { // Proceso Padre (Banco)
-            close(pipefd[0]);
+            close(pipefd[0]); // El padre cierra el extremo de lectura
             
-            // FASE 3.2: El padre debe esperar a que el hijo termine 
-            // antes de volver a pedir otra cuenta.
+            // Más adelante usaremos pipefd[1] para enviar alertas.
+            // Por ahora, solo cerramos el pipe y esperamos.
             waitpid(pid, NULL, 0); 
+            close(pipefd[1]); // Importante cerrar el pipe de escritura al terminar
         }
     }
 }
