@@ -8,6 +8,7 @@
 #include <fcntl.h>           // Para las constantes O_CREAT
 #include <sys/stat.h>        // Para las constantes de permisos (0644)
 #include <semaphore.h>       // Para usar los semáforos POSIX
+#include <string.h>
 
 int msgid;
 int pipe_lectura;
@@ -31,6 +32,17 @@ int crear_nueva_cuenta() {
     // Abrimos los semáforos ya existentes
     sem_t *sem_config = sem_open("/sem_config", 0);
     sem_t *sem_cuentas = sem_open("/sem_cuentas", 0);
+
+    if (sem_config == SEM_FAILED || sem_cuentas == SEM_FAILED) {
+        perror("Error abriendo semaforos en crear_nueva_cuenta");
+        if (sem_config != SEM_FAILED) {
+            sem_close(sem_config);
+        }
+        if (sem_cuentas != SEM_FAILED) {
+            sem_close(sem_cuentas);
+        }
+        return -1;
+    }
 
     // --- SECCIÓN CRÍTICA 1: Configuración ---
     sem_wait(sem_config); // Bajamos la barrera
@@ -69,6 +81,9 @@ int crear_nueva_cuenta() {
     // ---------------------------------------------
 
     printf("[BANCO] ¡Cuenta creada exitosamente! Tu numero de cuenta es: %d\n", nuevo_id);
+
+    sem_close(sem_config);
+    sem_close(sem_cuentas);
     
     // Devolvemos el ID creado para que el programa sepa qué cuenta es
     return nuevo_id;
@@ -78,10 +93,18 @@ void bucle_principal() {
     while (1) {
         int cuenta;
         printf("\nIntroduce número de cuenta (0 para crear nueva): ");
-        scanf("%d", &cuenta);
+        if (scanf("%d", &cuenta) != 1) {
+            int c;
+            while ((c = getchar()) != '\n' && c != EOF) {}
+            printf("[BANCO] Entrada invalida. Introduce un numero.\n");
+            continue;
+        }
 
         if (cuenta == 0) {
             cuenta = crear_nueva_cuenta();
+            if (cuenta < 0) {
+                continue;
+            }
         }
 
         int pipefd[2];
@@ -91,6 +114,13 @@ void bucle_principal() {
         }
 
         pid_t pid = fork();
+        if (pid < 0) {
+            perror("Error creando proceso usuario");
+            close(pipefd[0]);
+            close(pipefd[1]);
+            continue;
+        }
+
         if (pid == 0) { // Proceso Hijo (Usuario)
             close(pipefd[1]); // El hijo cierra el extremo de escritura (no lo usa)
             
@@ -109,12 +139,39 @@ void bucle_principal() {
             perror("Error ejecutando usuario");
             exit(1);
         } else { // Proceso Padre (Banco)
-            close(pipefd[0]); // El padre cierra el extremo de lectura
+            close(pipefd[0]); // El padre cierra el extremo de lectura del pipe
             
-            // Más adelante usaremos pipefd[1] para enviar alertas.
-            // Por ahora, solo cerramos el pipe y esperamos.
-            waitpid(pid, NULL, 0); 
-            close(pipefd[1]); // Importante cerrar el pipe de escritura al terminar
+            int status;
+            struct msgbuf alerta;
+
+            // Bucle del padre mientras el hijo (usuario) esté vivo
+            while (1) {
+                // 1. Comprobamos si el hijo ha cerrado sesión (WNOHANG hace que no se bloquee)
+                pid_t result = waitpid(pid, &status, WNOHANG);
+                if (result != 0) {
+                    // Si result es > 0 (el hijo terminó) o -1 (error), salimos del bucle
+                    break; 
+                }
+
+                // 2. Comprobamos si el monitor nos ha mandado una alerta (TIPO 2)
+                // IPC_NOWAIT hace que msgrcv no se bloquee si no hay mensajes
+                if (msgrcv(msgid, &alerta, sizeof(alerta.info), 2, IPC_NOWAIT) != -1) {
+                    
+                    // ¡Hemos recibido una alerta! Preparamos el texto a enviar al usuario
+                    char mensaje_pipe[256];
+                    sprintf(mensaje_pipe, "CUIDADO: Se ha detectado un movimiento sospechoso de %.2f EUR en tu cuenta.", 
+                            alerta.info.monitor.cantidad);
+                    
+                    // Se lo enviamos al usuario por el tubo (pipe)
+                    write(pipefd[1], mensaje_pipe, strlen(mensaje_pipe));
+                }
+                
+                // Dormimos 100 milisegundos para no saturar el procesador con el bucle
+                usleep(100000); 
+            }
+            
+            // Cuando el usuario sale del menú, el padre cierra el pipe de escritura
+            close(pipefd[1]); 
         }
     }
 }

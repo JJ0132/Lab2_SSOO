@@ -6,6 +6,7 @@
 #include <poll.h>
 #include <sys/msg.h>
 #include <semaphore.h>
+#include "config.h"
 
 // --- NUEVO: Variables globales para la Fase 4 ---
 int numero_cuenta;
@@ -51,7 +52,19 @@ void *ejecutar_operacion(void *arg) {
         // --- OPCIÓN 1: DEPÓSITO ---
         float cantidad;
         printf("\nIntroduce la cantidad a depositar (EUR): ");
-        scanf("%f", &cantidad);
+        if (scanf("%f", &cantidad) != 1) {
+            int c;
+            while ((c = getchar()) != '\n' && c != EOF) {}
+            printf("[ERROR] Cantidad invalida.\n");
+            sem_close(sem_cuentas);
+            pthread_exit(NULL);
+        }
+
+        // Limpiamos el fin de linea para que el siguiente Enter sea intencional.
+        {
+            int c;
+            while ((c = getchar()) != '\n' && c != EOF) {}
+        }
 
         Cuenta c;
         int cuenta_encontrada = 0;
@@ -104,6 +117,8 @@ void *ejecutar_operacion(void *arg) {
         printf("\n[INFO] Esta opcion se programara mas adelante.\n");
     }
 
+    sem_close(sem_cuentas);
+
     pthread_exit(NULL);
 }
 
@@ -118,7 +133,7 @@ void mostrar_menu() {
     printf("6. Salir\n");
 }
 
-void procesar_opcion(int opcion) {
+int procesar_opcion(int opcion) {
 
     pthread_t thread;
 
@@ -128,22 +143,33 @@ void procesar_opcion(int opcion) {
         case 2:
         case 3:
         case 4:
-        case 5:
+        case 5: {
             int *arg_opcion = malloc(sizeof(int));
+            if (arg_opcion == NULL) {
+                perror("Error reservando memoria para operacion");
+                return 0;
+            }
             *arg_opcion = opcion;
             
-            pthread_create(&thread, NULL, ejecutar_operacion, arg_opcion);
+            if (pthread_create(&thread, NULL, ejecutar_operacion, arg_opcion) != 0) {
+                perror("Error creando hilo de operacion");
+                free(arg_opcion);
+                return 0;
+            }
             pthread_join(thread, NULL);
-            break;
+            return 1;
+        }
 
         case 6:
-            // Quita el exit(0) de aquí para dejar que el main cierre las cosas bien
             printf("[USUARIO] Cerrando sesion de la cuenta %d...\n", numero_cuenta);
-            break;
+            return 2;
 
         default:
             printf("Opcion invalida\n");
+            return 0;
     }
+
+    return 0;
 }
 
 // --- NUEVO: El main actualizado ---
@@ -159,6 +185,8 @@ int main(int argc, char *argv[]) {
     pipe_lectura = atoi(argv[2]);
     msgid = atoi(argv[3]); // Guardamos el msgid que nos manda el padre
 
+    cargar_configuracion("../C/config.txt");
+
     printf("\n[USUARIO] Sesion iniciada para la cuenta %d\n", numero_cuenta);
 
     // 2. Configurar el "poll" para escuchar dos canales
@@ -170,6 +198,7 @@ int main(int argc, char *argv[]) {
     fds[1].events = POLLIN;
 
     int opcion = 0;
+    int esperando_enter = 0;
     mostrar_menu();
     printf("Opcion: ");
     fflush(stdout); // Obligamos a que el texto salga por pantalla inmediatamente
@@ -186,12 +215,17 @@ int main(int argc, char *argv[]) {
                 int bytes_leidos = read(pipe_lectura, alerta, sizeof(alerta) - 1);
                 if (bytes_leidos > 0) {
                     alerta[bytes_leidos] = '\0'; // Asegurar el fin de cadena
-                    printf("\n\n⚠️ [ALERTA DEL BANCO] %s\n", alerta);
-                    
-                    // Volvemos a pintar el menú para que el usuario no se pierda
-                    mostrar_menu();
-                    printf("Opcion: ");
+                    printf("\n\n[ALERTA DEL BANCO] %s\n", alerta);
+
+                    if (esperando_enter) {
+                        printf("[INFO] Pulsa Enter para volver al menu...\n");
+                    } else {
+                        printf("Opcion: ");
+                    }
                     fflush(stdout);
+                } else if (bytes_leidos == 0) {
+                    // El banco cerró el pipe; dejamos de vigilar este fd.
+                    fds[1].fd = -1;
                 }
             }
 
@@ -200,10 +234,30 @@ int main(int argc, char *argv[]) {
                 char buffer[10];
                 // Leemos lo que ha tecleado (fgets es más seguro que scanf aquí)
                 if (fgets(buffer, sizeof(buffer), stdin) != NULL) {
+                    if (esperando_enter) {
+                        esperando_enter = 0;
+                        mostrar_menu();
+                        printf("Opcion: ");
+                        fflush(stdout);
+                        continue;
+                    }
+
                     opcion = atoi(buffer);
                     
                     if (opcion > 0 && opcion <= 6) {
-                        procesar_opcion(opcion);
+                        int estado = procesar_opcion(opcion);
+
+                        if (estado == 2) {
+                            opcion = 6;
+                            continue;
+                        }
+
+                        if (estado == 1) {
+                            esperando_enter = 1;
+                            printf("\n[INFO] Pulsa Enter para volver al menu...\n");
+                            fflush(stdout);
+                            continue;
+                        }
                     }
                     
                     if (opcion != 6) {
