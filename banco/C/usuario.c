@@ -5,6 +5,7 @@
 #include "estructuras.h"
 #include <poll.h>
 #include <sys/msg.h>
+#include <semaphore.h>
 
 // --- NUEVO: Variables globales para la Fase 4 ---
 int numero_cuenta;
@@ -14,7 +15,94 @@ int msgid;
 
 void *ejecutar_operacion(void *arg) {
 
-    // TODO: implementar operación bancaria
+    // 1. Recuperamos la opción y liberamos la memoria
+    int tipo_op = *(int*)arg;
+    free(arg);
+
+    // 2. Abrimos el semáforo para proteger las cuentas
+    sem_t *sem_cuentas = sem_open("/sem_cuentas", 0);
+    if (sem_cuentas == SEM_FAILED) {
+        perror("Error abriendo semaforo en el hilo");
+        pthread_exit(NULL);
+    }
+
+    if (tipo_op == 4) { 
+        // --- OPCIÓN 4: CONSULTAR SALDO ---
+        Cuenta c;
+        sem_wait(sem_cuentas); // Barrera bajada
+        
+        // Abrimos en modo "read binary"
+        FILE *f = fopen("../C/config.txt", "rb"); // Usamos un fallback seguro temporalmente, pero luego usaremos cuentas.dat
+        f = fopen("cuentas.dat", "rb"); 
+        
+        if (f != NULL) {
+            while (fread(&c, sizeof(Cuenta), 1, f)) {
+                if (c.numero_cuenta == numero_cuenta) {
+                    printf("\n[SALDO ACTUAL] EUR: %.2f | USD: %.2f | GBP: %.2f\n", 
+                           c.saldo_eur, c.saldo_usd, c.saldo_gbp);
+                    break;
+                }
+            }
+            fclose(f);
+        }
+        sem_post(sem_cuentas); // Barrera levantada
+
+    } else if (tipo_op == 1) { 
+        // --- OPCIÓN 1: DEPÓSITO ---
+        float cantidad;
+        printf("\nIntroduce la cantidad a depositar (EUR): ");
+        scanf("%f", &cantidad);
+
+        Cuenta c;
+        int cuenta_encontrada = 0;
+
+        sem_wait(sem_cuentas); // Barrera bajada
+        
+        // Abrimos en modo "read + write binary" (r+b) para poder modificar
+        FILE *f = fopen("cuentas.dat", "r+b");
+        if (f != NULL) {
+            while (fread(&c, sizeof(Cuenta), 1, f)) {
+                if (c.numero_cuenta == numero_cuenta) {
+                    cuenta_encontrada = 1;
+                    
+                    // Modificamos los datos
+                    c.saldo_eur += cantidad;
+                    c.num_transacciones++;
+
+                    // TRUCO: Como el fread ha avanzado el cursor, retrocedemos el tamaño de una cuenta
+                    fseek(f, -sizeof(Cuenta), SEEK_CUR);
+                    
+                    // Sobrescribimos la cuenta con los nuevos datos
+                    fwrite(&c, sizeof(Cuenta), 1, f);
+                    break;
+                }
+            }
+            fclose(f);
+        }
+        sem_post(sem_cuentas); // Barrera levantada
+
+        if (cuenta_encontrada) {
+            printf("[EXITO] Has depositado %.2f EUR.\n", cantidad);
+
+            // --- FASE DE COMUNICACIÓN: ENVIAR AL MONITOR ---
+            struct msgbuf msj;
+            msj.mtype = 1; // Tipo 1 = Mensaje para el Monitor
+            
+            msj.info.monitor.cuenta_origen = numero_cuenta;
+            msj.info.monitor.tipo_op = tipo_op;
+            msj.info.monitor.cantidad = cantidad;
+            msj.info.monitor.divisa = 1; // Supongamos 1 = EUR
+            
+            // Enviamos el mensaje a la cola (msgid es la variable global)
+            if (msgsnd(msgid, &msj, sizeof(msj.info), 0) == -1) {
+                perror("Error enviando mensaje al monitor");
+            } else {
+                printf("[SISTEMA] Notificación enviada al Monitor.\n");
+            }
+        }
+    } else {
+        printf("\n[INFO] Esta opcion se programara mas adelante.\n");
+    }
 
     pthread_exit(NULL);
 }
@@ -41,7 +129,10 @@ void procesar_opcion(int opcion) {
         case 3:
         case 4:
         case 5:
-            pthread_create(&thread, NULL, ejecutar_operacion, NULL);
+            int *arg_opcion = malloc(sizeof(int));
+            *arg_opcion = opcion;
+            
+            pthread_create(&thread, NULL, ejecutar_operacion, arg_opcion);
             pthread_join(thread, NULL);
             break;
 

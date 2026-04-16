@@ -5,3 +5,4 @@ all:
 
 clean:
 	rm -f banco usuario monitor
+	rm cuentas.dat

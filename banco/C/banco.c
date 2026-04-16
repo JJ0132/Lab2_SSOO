@@ -122,8 +122,7 @@ void bucle_principal() {
 int main() {
     // 1. Cargar la configuración
     cargar_configuracion("../C/config.txt");
-    printf("[SISTEMA] Configuracion cargada exitosamente.\n");
-
+    
     // --- NUEVO: FASE 2 (SEMÁFOROS) ---
     // Truco pro: Desvinculamos los semáforos antes de crearlos por si 
     // el programa se cerró mal en una ejecución anterior y se quedaron bloqueados[cite: 250, 252].
