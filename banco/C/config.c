@@ -47,5 +47,4 @@ void cargar_configuracion(const char *nombre_archivo) {
     }
 
     fclose(archivo);
-    printf("[SISTEMA] Configuracion cargada exitosamente.\n");
 }
