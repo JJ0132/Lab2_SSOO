@@ -6,6 +6,19 @@
 #include "estructuras.h"
 #include "config.h"
 
+static const char *nombre_divisa(int divisa) {
+    if (divisa == 1) {
+        return "EUR";
+    }
+    if (divisa == 2) {
+        return "USD";
+    }
+    if (divisa == 3) {
+        return "GBP";
+    }
+    return "DESCONOCIDA";
+}
+
 void analizar_transaccion(DatosMonitor *datos, int msgid) {
 printf("\n[MONITOR] Interceptada operacion de la cuenta: %d\n", datos->cuenta_origen);
     
@@ -16,9 +29,15 @@ printf("\n[MONITOR] Interceptada operacion de la cuenta: %d\n", datos->cuenta_or
         time_t t = time(NULL);
         struct tm *tm = localtime(&t);
         
-        fprintf(log, "[%02d:%02d:%02d] CUENTA: %d | OP: %d | CANT: %.2f | DIVISA: %d\n",
-                tm->tm_hour, tm->tm_min, tm->tm_sec,
-                datos->cuenta_origen, datos->tipo_op, datos->cantidad, datos->divisa);
+        fprintf(log, "[%02d:%02d:%02d] CUENTA: %d | OP: %d | CANT: %.2f | DIVISA: %d (%s)\n",
+            tm->tm_hour, 
+            tm->tm_min, 
+            tm->tm_sec, 
+            datos->cuenta_origen,
+            datos->tipo_op,
+            datos->cantidad,
+            datos->divisa,
+            nombre_divisa(datos->divisa));
         fclose(log);
     } else {
         perror("Error escribiendo en el log");
