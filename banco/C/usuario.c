@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <errno.h>
+#include <math.h>
 #include "estructuras.h"
 #include <poll.h>
 #include <sys/msg.h>
@@ -13,6 +15,39 @@ int numero_cuenta;
 int pipe_lectura;
 int msgid;
 // ------------------------------------------------
+
+static int leer_cantidad_deposito(float *cantidad) {
+    char buffer[128];
+    char *endptr;
+
+    printf("\nIntroduce la cantidad a depositar (EUR): ");
+    fflush(stdout);
+
+    if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
+        return 0;
+    }
+
+    errno = 0;
+    *cantidad = strtof(buffer, &endptr);
+
+    if (endptr == buffer) {
+        return 0;
+    }
+
+    while (*endptr == ' ' || *endptr == '\t') {
+        endptr++;
+    }
+
+    if (*endptr != '\n' && *endptr != '\0') {
+        return 0;
+    }
+
+    if (errno == ERANGE || !isfinite(*cantidad) || *cantidad <= 0.0f) {
+        return 0;
+    }
+
+    return 1;
+}
 
 void *ejecutar_operacion(void *arg) {
 
@@ -51,19 +86,10 @@ void *ejecutar_operacion(void *arg) {
     } else if (tipo_op == 1) { 
         // --- OPCIÓN 1: DEPÓSITO ---
         float cantidad;
-        printf("\nIntroduce la cantidad a depositar (EUR): ");
-        if (scanf("%f", &cantidad) != 1) {
-            int c;
-            while ((c = getchar()) != '\n' && c != EOF) {}
-            printf("[ERROR] Cantidad invalida.\n");
+        if (!leer_cantidad_deposito(&cantidad)) {
+            printf("[ERROR] Cantidad invalida. Introduce un numero positivo y valido.\n");
             sem_close(sem_cuentas);
             pthread_exit(NULL);
-        }
-
-        // Limpiamos el fin de linea para que el siguiente Enter sea intencional.
-        {
-            int c;
-            while ((c = getchar()) != '\n' && c != EOF) {}
         }
 
         Cuenta c;
