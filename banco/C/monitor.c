@@ -19,6 +19,41 @@ static const char *nombre_divisa(int divisa) {
     return "DESCONOCIDA";
 }
 
+static const char *nombre_operacion(int tipo_op) {
+    if (tipo_op == 1) {
+        return "DEPOSITO";
+    }
+    if (tipo_op == 2) {
+        return "RETIRO";
+    }
+    if (tipo_op == 3) {
+        return "TRANSFERENCIA";
+    }
+    if (tipo_op == 4) {
+        return "CONSULTA_SALDO";
+    }
+    if (tipo_op == 5) {
+        return "MOVER_DIVISAS";
+    }
+    return "DESCONOCIDA";
+}
+
+static float obtener_limite_operacion(int tipo_op, int divisa) {
+    if (tipo_op == 1) {
+        if (divisa == 1) return config_banco.lim_dep_eur;
+        if (divisa == 2) return config_banco.lim_dep_usd;
+        if (divisa == 3) return config_banco.lim_dep_gbp;
+    }
+
+    if (tipo_op == 2) {
+        if (divisa == 1) return config_banco.lim_ret_eur;
+        if (divisa == 2) return config_banco.lim_ret_usd;
+        if (divisa == 3) return config_banco.lim_ret_gbp;
+    }
+
+    return 0.0f;
+}
+
 void analizar_transaccion(DatosMonitor *datos, int msgid) {
 printf("\n[MONITOR] Interceptada operacion de la cuenta: %d\n", datos->cuenta_origen);
     
@@ -29,11 +64,12 @@ printf("\n[MONITOR] Interceptada operacion de la cuenta: %d\n", datos->cuenta_or
         time_t t = time(NULL);
         struct tm *tm = localtime(&t);
         
-        fprintf(log, "[%02d:%02d:%02d] CUENTA: %d | OP: %d | CANT: %.2f | DIVISA: %d (%s)\n",
+        fprintf(log, "[%02d:%02d:%02d] CUENTA: %d | OP: %s(%d) | CANT: %.2f | DIVISA: %d (%s)\n",
             tm->tm_hour, 
             tm->tm_min, 
             tm->tm_sec, 
             datos->cuenta_origen,
+            nombre_operacion(datos->tipo_op),
             datos->tipo_op,
             datos->cantidad,
             datos->divisa,
@@ -44,10 +80,15 @@ printf("\n[MONITOR] Interceptada operacion de la cuenta: %d\n", datos->cuenta_or
     }
 
     // --- 2. DETECCIÓN DE ANOMALÍAS ---
-    if (datos->tipo_op == 1) {
-        printf("[MONITOR] Tipo: DEPOSITO | Cantidad: %.2f\n", datos->cantidad);
-        
-        if (datos->cantidad > 3000.0) {
+    if (datos->tipo_op == 1 || datos->tipo_op == 2) {
+        float limite = obtener_limite_operacion(datos->tipo_op, datos->divisa);
+
+        printf("[MONITOR] Tipo: %s | Cantidad: %.2f %s\n",
+               nombre_operacion(datos->tipo_op),
+               datos->cantidad,
+               nombre_divisa(datos->divisa));
+
+        if (limite > 0.0f && datos->cantidad > limite) {
             printf("[ALERTA MONITOR] ¡Movimiento inusualmente alto! Avisando al banco...\n");
             
             // Enviamos un mensaje de ALERTA (Tipo 2) a la cola

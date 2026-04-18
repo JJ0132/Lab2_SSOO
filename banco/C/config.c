@@ -30,6 +30,9 @@ void cargar_configuracion(const char *nombre_archivo) {
             // Asignamos los valores convirtiendo las cadenas de texto (strings) 
             // a números enteros (atoi), decimales (atof) o copiando texto (strcpy)
             if (strcmp(clave, "PROXIMO_ID") == 0) config_banco.proximo_id = atoi(valor_str);
+            else if (strcmp(clave, "LIM_DEP_EUR") == 0) config_banco.lim_dep_eur = atof(valor_str);
+            else if (strcmp(clave, "LIM_DEP_USD") == 0) config_banco.lim_dep_usd = atof(valor_str);
+            else if (strcmp(clave, "LIM_DEP_GBP") == 0) config_banco.lim_dep_gbp = atof(valor_str);
             else if (strcmp(clave, "LIM_RET_EUR") == 0) config_banco.lim_ret_eur = atof(valor_str);
             else if (strcmp(clave, "LIM_RET_USD") == 0) config_banco.lim_ret_usd = atof(valor_str);
             else if (strcmp(clave, "LIM_RET_GBP") == 0) config_banco.lim_ret_gbp = atof(valor_str);

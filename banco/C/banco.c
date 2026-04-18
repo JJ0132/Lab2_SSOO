@@ -13,6 +13,19 @@
 int msgid;
 int pipe_lectura;
 
+static const char *nombre_divisa(int divisa) {
+    if (divisa == 1) {
+        return "EUR";
+    }
+    if (divisa == 2) {
+        return "USD";
+    }
+    if (divisa == 3) {
+        return "GBP";
+    }
+    return "DESCONOCIDA";
+}
+
 void lanzar_monitor() {
     pid_t pid = fork();
 
@@ -159,8 +172,9 @@ void bucle_principal() {
                     
                     // ¡Hemos recibido una alerta! Preparamos el texto a enviar al usuario
                     char mensaje_pipe[256];
-                    sprintf(mensaje_pipe, "CUIDADO: Se ha detectado un movimiento sospechoso de %.2f EUR en tu cuenta.", 
-                            alerta.info.monitor.cantidad);
+                        sprintf(mensaje_pipe, "CUIDADO: Se ha detectado un movimiento sospechoso de %.2f %s en tu cuenta.", 
+                            alerta.info.monitor.cantidad,
+                            nombre_divisa(alerta.info.monitor.divisa));
                     
                     // Se lo enviamos al usuario por el tubo (pipe)
                     write(pipefd[1], mensaje_pipe, strlen(mensaje_pipe));
