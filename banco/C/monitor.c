@@ -51,6 +51,12 @@ static float obtener_limite_operacion(int tipo_op, int divisa) {
         if (divisa == 3) return config_banco.lim_ret_gbp;
     }
 
+    if (tipo_op == 3) {
+        if (divisa == 1) return config_banco.lim_trf_eur;
+        if (divisa == 2) return config_banco.lim_trf_usd;
+        if (divisa == 3) return config_banco.lim_trf_gbp;
+    }
+
     return 0.0f;
 }
 
@@ -64,23 +70,37 @@ printf("\n[MONITOR] Interceptada operacion de la cuenta: %d\n", datos->cuenta_or
         time_t t = time(NULL);
         struct tm *tm = localtime(&t);
         
-        fprintf(log, "[%02d:%02d:%02d] CUENTA: %d | OP: %s(%d) | CANT: %.2f | DIVISA: %d (%s)\n",
-            tm->tm_hour, 
-            tm->tm_min, 
-            tm->tm_sec, 
-            datos->cuenta_origen,
-            nombre_operacion(datos->tipo_op),
-            datos->tipo_op,
-            datos->cantidad,
-            datos->divisa,
-            nombre_divisa(datos->divisa));
+        if (datos->tipo_op == 3) {
+            fprintf(log, "[%02d:%02d:%02d] ORIGEN: %d | DESTINO: %d | OP: %s(%d) | CANT: %.2f | DIVISA: %d (%s)\n",
+                tm->tm_hour,
+                tm->tm_min,
+                tm->tm_sec,
+                datos->cuenta_origen,
+                datos->cuenta_destino,
+                nombre_operacion(datos->tipo_op),
+                datos->tipo_op,
+                datos->cantidad,
+                datos->divisa,
+                nombre_divisa(datos->divisa));
+        } else {
+            fprintf(log, "[%02d:%02d:%02d] CUENTA: %d | OP: %s(%d) | CANT: %.2f | DIVISA: %d (%s)\n",
+                tm->tm_hour,
+                tm->tm_min,
+                tm->tm_sec,
+                datos->cuenta_origen,
+                nombre_operacion(datos->tipo_op),
+                datos->tipo_op,
+                datos->cantidad,
+                datos->divisa,
+                nombre_divisa(datos->divisa));
+        }
         fclose(log);
     } else {
         perror("Error escribiendo en el log");
     }
 
     // --- 2. DETECCIÓN DE ANOMALÍAS ---
-    if (datos->tipo_op == 1 || datos->tipo_op == 2) {
+    if (datos->tipo_op == 1 || datos->tipo_op == 2 || datos->tipo_op == 3) {
         float limite = obtener_limite_operacion(datos->tipo_op, datos->divisa);
 
         printf("[MONITOR] Tipo: %s | Cantidad: %.2f %s\n",
