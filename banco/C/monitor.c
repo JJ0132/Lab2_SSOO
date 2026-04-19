@@ -82,6 +82,17 @@ printf("\n[MONITOR] Interceptada operacion de la cuenta: %d\n", datos->cuenta_or
                 datos->cantidad,
                 datos->divisa,
                 nombre_divisa(datos->divisa));
+        } else if (datos->tipo_op == 5) {
+            fprintf(log, "[%02d:%02d:%02d] CUENTA: %d | OP: %s(%d) | CANT: %.2f | DE: %s | A: %s\n",
+                tm->tm_hour,
+                tm->tm_min,
+                tm->tm_sec,
+                datos->cuenta_origen,
+                nombre_operacion(datos->tipo_op),
+                datos->tipo_op,
+                datos->cantidad,
+                nombre_divisa(datos->divisa),
+                nombre_divisa(datos->cuenta_destino));
         } else {
             fprintf(log, "[%02d:%02d:%02d] CUENTA: %d | OP: %s(%d) | CANT: %.2f | DIVISA: %d (%s)\n",
                 tm->tm_hour,
@@ -120,6 +131,13 @@ printf("\n[MONITOR] Interceptada operacion de la cuenta: %d\n", datos->cuenta_or
         } else {
             printf("[MONITOR] Transaccion normal. Sin alertas.\n");
         }
+    } else if (datos->tipo_op == 5) {
+        printf("[MONITOR] Tipo: %s | Cambio: %.2f %s -> %s\n",
+               nombre_operacion(datos->tipo_op),
+               datos->cantidad,
+               nombre_divisa(datos->divisa),
+               nombre_divisa(datos->cuenta_destino));
+        printf("[MONITOR] Transaccion normal. Sin alertas.\n");
     }
 }
 
